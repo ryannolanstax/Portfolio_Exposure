@@ -36,7 +36,8 @@ chargeback_days = 180
 
 # Days Processing Calculation Function
 def calculate_days_processing(date_opened):
-    if date_opened.year < 2024:
+    current_year = datetime.now().year
+    if date_opened.year < current_year:
         return days_in_selected_month
     else:
         days_in_year = (date_opened - datetime(date_opened.year, 1, 1)).days
