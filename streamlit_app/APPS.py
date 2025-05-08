@@ -70,8 +70,8 @@ if apps_file and mcc_file:
     # Calculating Risk Metrics
     df_merged['refund_risk'] = (df_merged['YTD Volume Card-NOT-Present'] / df_merged['days_processing']) * df_merged['refund_rate'] * refund_days
     df_merged['chargeback_risk'] = (df_merged['YTD Volume Card-NOT-Present'] / df_merged['days_processing']) * df_merged['chargeback_rate'] * chargeback_days
-    df_merged['cnp_dd_risk'] = (df_merged['YTD Volume Card-NOT-Present'] / df_merged['days_processing']) * df_merged['CNP']
-    df_merged['cp_dd_risk'] = (df_merged['YTD Volume Card-Present'] / df_merged['days_processing']) * df_merged['CP/ACH']
+    df_merged['cnp_dd_risk'] = (df_merged['YTD Volume Card-NOT-Present'] / df_merged['days_processing']) * df_merged['CNP_DD']
+    df_merged['cp_dd_risk'] = (df_merged['YTD Volume Card-Present'] / df_merged['days_processing']) * df_merged['CP_DD']
     
     # Total Exposure Calculation
     df_merged['exposure'] = df_merged['refund_risk'] + df_merged['chargeback_risk'] + df_merged['cnp_dd_risk'] + df_merged['cp_dd_risk']
