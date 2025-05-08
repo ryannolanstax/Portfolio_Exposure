@@ -1,11 +1,11 @@
-#python3 -m streamlit run apps_exposure/test2.py 
+#python3 -m streamlit run apps_exposure/test3.py 
 
+#new version with genrated code
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-
-#new
+import matplotlib.pyplot as plt
 import altair as alt
 
 # Streamlit App Title
@@ -18,33 +18,38 @@ st.write("Please cleanup Synovous Processing Sheet before uploading, no blank sp
 apps_file = st.file_uploader("Upload APPS Sheet", type=['csv', 'xlsx'])
 mcc_file = st.file_uploader("Upload MCC Sheet", type=['csv', 'xlsx'])
 
-# Dropdown for Month Selection
-month_selection = st.selectbox("Select Month", ['January', 'February', 'March', 'April', 'May', 'June', 
-                                                 'July', 'August', 'September', 'October', 'November', 'December'])
+# Default month selection to current month
+current_month = datetime.now().strftime('%B')
+month_options = ['January', 'February', 'March', 'April', 'May', 'June', 
+                 'July', 'August', 'September', 'October', 'November', 'December']
+month_selection = st.selectbox("Select Month", month_options, index=month_options.index(current_month))
 
-# Convert selected month to days equivalent for calculation
-month_days_mapping = {
-    'January': 31, 'February': 59, 'March': 90, 'April': 120, 'May': 151,
-    'June': 181, 'July': 212, 'August': 243, 'September': 273,
-    'October': 304, 'November': 334, 'December': 365
-}
-days_in_selected_month = month_days_mapping[month_selection]
+# Submit Button
+submitted = st.button("Submit")
 
-# Default values
-refund_days = 30
-chargeback_days = 180
+# Only run processing if submit button is clicked
+if submitted and apps_file and mcc_file:
+    # Convert selected month to days equivalent for calculation
+    month_days_mapping = {
+        'January': 31, 'February': 59, 'March': 90, 'April': 120, 'May': 151,
+        'June': 181, 'July': 212, 'August': 243, 'September': 273,
+        'October': 304, 'November': 334, 'December': 365
+    }
+    days_in_selected_month = month_days_mapping[month_selection]
 
-# Days Processing Calculation Function
-def calculate_days_processing(date_opened):
-    current_year = datetime.now().year
-    if date_opened.year < current_year:
-        return days_in_selected_month
-    else:
-        days_in_year = (date_opened - datetime(date_opened.year, 1, 1)).days
-        return days_in_selected_month - days_in_year
+    # Constants
+    refund_days = 30
+    chargeback_days = 180
 
-# Processing data when both files are uploaded
-if apps_file and mcc_file:
+    # Days Processing Calculation Function
+    def calculate_days_processing(date_opened):
+        current_year = datetime.now().year
+        if date_opened.year < current_year:
+            return days_in_selected_month
+        else:
+            days_in_year = (date_opened - datetime(date_opened.year, 1, 1)).days
+            return days_in_selected_month - days_in_year
+
     # Load DataFrames
     apps_df = pd.read_excel(apps_file) if apps_file.name.endswith('.xlsx') else pd.read_csv(apps_file)
     mcc_df = pd.read_excel(mcc_file, sheet_name='MCC Ratings') if mcc_file.name.endswith('.xlsx') else pd.read_csv(mcc_file)
@@ -55,34 +60,31 @@ if apps_file and mcc_file:
     apps_df = apps_df[apps_df['YTD Gross Sales Volume'] > 1]
     apps_df['Date Opened'] = pd.to_datetime(apps_df['Date Opened'])
     apps_df['days_processing'] = apps_df['Date Opened'].apply(calculate_days_processing)
-    
+
     # Calculating Refund and Chargeback Rates
     apps_df['refund_rate'] = apps_df['YTD Credit Volume'] / apps_df['YTD Gross Sales Volume']
     apps_df['chargeback_rate'] = apps_df['YTD Chargeback Volume'] / apps_df['YTD Gross Sales Volume']
 
-    # Convert columns for proper merging
+    # Merge
     apps_df['MCC'] = apps_df['MCC'].astype(str)
     mcc_df['MCC'] = mcc_df['MCC'].astype(str)
     apps_df['MID'] = apps_df['MID'].astype(str)
 
-    # Merge APPS and MCC DataFrames
     df_merged = apps_df.merge(mcc_df, on='MCC', how='left')
+    df_merged['MCC_Risk_Tier'] = df_merged[['AML_Risk_Rating', 'Loss_Risk_Rating']].max(axis=1)
 
-    # Calculating Risk Metrics
+    # Risk Calculations
     df_merged['refund_risk'] = (df_merged['YTD Volume Card-NOT-Present'] / df_merged['days_processing']) * df_merged['refund_rate'] * refund_days
     df_merged['chargeback_risk'] = (df_merged['YTD Volume Card-NOT-Present'] / df_merged['days_processing']) * df_merged['chargeback_rate'] * chargeback_days
     df_merged['cnp_dd_risk'] = (df_merged['YTD Volume Card-NOT-Present'] / df_merged['days_processing']) * df_merged['CNP_DD']
     df_merged['cp_dd_risk'] = (df_merged['YTD Volume Card-Present'] / df_merged['days_processing']) * df_merged['CP_DD']
-    
-    # Total Exposure Calculation
     df_merged['exposure'] = df_merged['refund_risk'] + df_merged['chargeback_risk'] + df_merged['cnp_dd_risk'] + df_merged['cp_dd_risk']
+
     total_exposure = df_merged['exposure'].sum()
     max_exposure = df_merged['exposure'].max()
 
-    # Display results
     st.write("Total Exposure: $", f"{total_exposure:,.2f}")
     st.write("Max Exposure: $", f"{max_exposure:,.2f}")
-
 
     def categorize_exposure(value):
         if value < 100000:
@@ -93,23 +95,49 @@ if apps_file and mcc_file:
             return 'Range_Over_500k'
 
     df_merged['exposure_category'] = df_merged['exposure'].apply(categorize_exposure)
-
-    # Step 2: Group by category and count merchants
     exposure_counts = df_merged.groupby('exposure_category').size().reset_index(name='number_of_merchants')
 
-    # Step 3: Plot using Altair
-    chart = alt.Chart(exposure_counts).mark_bar().encode(
+    # Altair Bar Chart
+    chart1 = alt.Chart(exposure_counts).mark_bar().encode(
         x=alt.X('exposure_category', title='Exposure Threshold'),
         y=alt.Y('number_of_merchants', title='Total Merchants'),
         tooltip=['number_of_merchants']
-    ).properties(
-        title='Exposure Count by Threshold Level'
-    )
+    ).properties(title='Exposure Count by Threshold Level')
 
-    # Step 4: Display in Streamlit
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart1, use_container_width=True)
 
-    # Save processed file
+    # Top 10 MCCs
+    df_mcc_exposure = df_merged.groupby('MCC')['exposure'].sum().sort_values(ascending=False).head(10)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    df_mcc_exposure.plot(kind='bar', ax=ax, color='steelblue')
+    ax.set_title("APPS Top 10 MCCs by Exposure", fontsize=16)
+    ax.set_xlabel("MCC", fontsize=12)
+    ax.set_ylabel("Total Exposure", fontsize=12)
+    ax.tick_params(axis='x', rotation=45)
+    ax.ticklabel_format(style='plain', axis='y')
+    for i, v in enumerate(df_mcc_exposure.values):
+        ax.text(i, v + max(df_mcc_exposure.values)*0.02, f"{v:,.0f}", ha='center', fontsize=10)
+    st.pyplot(fig)
+
+    # Top 10 Merchants
+    top_merchants = df_merged.sort_values(by='exposure', ascending=False).head(10)
+    top_merchants_display = top_merchants[['MID', 'Merchant Legal Name', 'MCC', 'MCC_Risk_Tier', 'exposure']]
+    top_merchants_display['exposure'] = top_merchants_display['exposure'].map('{:,.0f}'.format)
+    st.subheader("Top 10 Merchants by Exposure")
+    st.dataframe(top_merchants_display.reset_index(drop=True))
+
+    # Count by Risk Tier
+    tier_counts = df_merged['MCC_Risk_Tier'].value_counts().sort_index()
+    fig, ax = plt.subplots(figsize=(8, 5))
+    tier_counts.plot(kind='bar', ax=ax, color='darkorange')
+    ax.set_title("APPS Merchant Count by MCC Risk Tier", fontsize=16)
+    ax.set_xlabel("MCC Risk Tier", fontsize=12)
+    ax.set_ylabel("Number of Merchants", fontsize=12)
+    for i, v in enumerate(tier_counts.values):
+        ax.text(i, v + 1, str(v), ha='center', fontsize=10)
+    st.pyplot(fig)
+
+    # File Download
     st.write("Download the processed data:")
     df_merged.to_excel("APPS_Exposure.xlsx", index=False)
     st.download_button(
