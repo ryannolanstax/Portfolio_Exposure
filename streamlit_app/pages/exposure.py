@@ -1,7 +1,5 @@
 #python3 -m streamlit run apps_exposure/test3.py 
 
-#new version with genrated code
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
