@@ -1,5 +1,7 @@
 #python3 -m streamlit run apps_exposure/test3.py 
 
+#new version with genrated code
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -95,14 +97,20 @@ if submitted and apps_file and mcc_file:
     df_merged['exposure_category'] = df_merged['exposure'].apply(categorize_exposure)
     exposure_counts = df_merged.groupby('exposure_category').size().reset_index(name='number_of_merchants')
 
-    # Altair Bar Chart
-    chart1 = alt.Chart(exposure_counts).mark_bar().encode(
-        x=alt.X('exposure_category', title='Exposure Threshold'),
-        y=alt.Y('number_of_merchants', title='Total Merchants'),
-        tooltip=['number_of_merchants']
-    ).properties(title='Exposure Count by Threshold Level')
+    # Ensure exposure_counts is a DataFrame and not empty before charting
+    if not exposure_counts.empty:
+        exposure_counts = pd.DataFrame(exposure_counts)  # Defensive type enforcement
 
-    st.altair_chart(chart1, use_container_width=True)
+        # Altair Bar Chart
+        chart1 = alt.Chart(exposure_counts).mark_bar().encode(
+            x=alt.X('exposure_category', title='Exposure Threshold'),
+            y=alt.Y('number_of_merchants', title='Total Merchants'),
+            tooltip=['number_of_merchants']
+        ).properties(title='Exposure Count by Threshold Level')
+
+        st.altair_chart(chart1, use_container_width=True)
+    else:
+        st.warning("No merchants fall into the exposure thresholds. Check your input files or filters.")
 
     # Top 10 MCCs
     df_mcc_exposure = df_merged.groupby('MCC')['exposure'].sum().sort_values(ascending=False).head(10)
