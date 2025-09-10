@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # This will check authentication and redirect if not logged in
 #if require_auth("Underwriting and Risk Calculator 8/27/25 Updates"):
-if require_role(["Direct"], "Underwriting and Risk Calculator"):
+if require_role(["Risk"], "Underwriting and Risk Calculator"):
   
   # Streamlit App Title
   st.title("APPS Exposure & Risk Analysis")
